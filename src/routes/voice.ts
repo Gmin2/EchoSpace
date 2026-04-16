@@ -20,48 +20,60 @@ router.post('/voice', async (req, res) => {
       return res.status(400).json({ error: 'audioBase64 and context required' });
     }
 
+    // Step 1: Transcribe audio with Whisper
+    const audioBuffer = Buffer.from(audioBase64, 'base64');
+    const audioFile = new File([audioBuffer], 'audio.webm', { type: 'audio/webm' });
+
+    const transcription = await openai.audio.transcriptions.create({
+      model: 'whisper-1',
+      file: audioFile,
+    });
+
+    const userTranscript = transcription.text;
+    console.log('Transcribed:', userTranscript);
+
+    // Step 2: Reason with GPT-4o (text-only, same as chat route)
     const systemPrompt = buildAgentPrompt(context);
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-audio-preview',
-      modalities: ['text', 'audio'],
-      audio: { voice: 'alloy', format: 'wav' },
+      model: 'gpt-4o',
       messages: [
         { role: 'system', content: systemPrompt },
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: `Current space: "${context.spaceName}". ${context.memories.length} memories loaded.`,
-            },
-            {
-              type: 'input_audio',
-              input_audio: { data: audioBase64, format: 'wav' },
-            },
-          ],
-        },
+        { role: 'user', content: userTranscript },
       ],
+      response_format: { type: 'json_object' },
+      temperature: 0.7,
+      max_tokens: 1024,
     });
 
-    const choice = response.choices[0];
-    const agentAudioBase64 = choice.message.audio?.data || '';
-    const agentTranscript = choice.message.audio?.transcript || choice.message.content || '';
-
-    // Try to parse structured actions from text content
-    let agentText = agentTranscript;
+    const raw = response.choices[0].message.content || '{}';
+    let agentText = raw;
     let actions: AgentAction[] = [];
 
     try {
-      const parsed = JSON.parse(agentTranscript);
+      const parsed = JSON.parse(raw);
       if (parsed.message) agentText = parsed.message;
       if (Array.isArray(parsed.actions)) actions = parsed.actions;
     } catch {
-      // Agent responded naturally without JSON — that's fine
+      // Use raw text
+    }
+
+    // Step 3: Generate speech response with TTS
+    let agentAudioBase64 = '';
+    try {
+      const tts = await openai.audio.speech.create({
+        model: 'tts-1',
+        voice: 'alloy',
+        input: agentText,
+      });
+      const ttsBuffer = Buffer.from(await tts.arrayBuffer());
+      agentAudioBase64 = ttsBuffer.toString('base64');
+    } catch (ttsErr) {
+      console.error('TTS failed:', ttsErr);
     }
 
     const result: VoiceResponse = {
-      transcript: agentTranscript,
+      transcript: userTranscript,
       agentText,
       agentAudioBase64,
       actions,
