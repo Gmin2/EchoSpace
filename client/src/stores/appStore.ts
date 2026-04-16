@@ -18,6 +18,10 @@ interface AppStore {
   pointCloudCount: number;
   updatePointCloud: (positions: Float32Array, colors: Float32Array, count: number) => void;
 
+  // Room model (GLB from scan)
+  roomModelUrl: string | null;
+  setRoomModelUrl: (url: string | null) => void;
+
   // UI
   selectedAnchorId: string | null;
   setSelectedAnchorId: (id: string | null) => void;
@@ -50,11 +54,14 @@ export const useAppStore = create<AppStore>((set) => ({
   updatePointCloud: (positions, colors, count) =>
     set({ pointCloudPositions: positions, pointCloudColors: colors, pointCloudCount: count }),
 
+  roomModelUrl: null,
+  setRoomModelUrl: (url) => set({ roomModelUrl: url }),
+
   selectedAnchorId: null,
   setSelectedAnchorId: (id) => set({ selectedAnchorId: id }),
   sidebarOpen: true,
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
-  mockMode: true, // start in mock mode
+  mockMode: false, // always live
   toggleMockMode: () => set((s) => ({ mockMode: !s.mockMode })),
 
   isRecording: false,

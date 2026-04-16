@@ -1,38 +1,86 @@
+import { useState } from 'react';
 import { useAppStore } from './stores/appStore';
 import SpaceList from './components/spaces/SpaceList';
+import SceneCanvas from './components/scene/SceneCanvas';
+import Sidebar from './components/sidebar/Sidebar';
+import AddMemoryPopup from './components/hud/AddMemoryPopup';
+import VoiceIndicator from './components/hud/VoiceIndicator';
+import ScanUI from './components/webcam/ScanUI';
+import { createAnchor, createMemory } from './hooks/useMemories';
+import type { SpatialPosition } from './types/anchor';
 import './App.css';
 
 function App() {
   const currentSpaceId = useAppStore((s) => s.currentSpaceId);
+  const [pendingAnchorPos, setPendingAnchorPos] = useState<SpatialPosition | null>(null);
+  const [showScan, setShowScan] = useState(false);
 
   if (!currentSpaceId) {
     return <SpaceList />;
   }
 
-  // TODO: Person A will build the 3D workspace view
+  const handlePlaceAnchor = (position: SpatialPosition) => {
+    setPendingAnchorPos(position);
+  };
+
+  const handleSaveMemory = async (content: string) => {
+    if (!pendingAnchorPos || !currentSpaceId) return;
+    const anchor = await createAnchor(currentSpaceId, pendingAnchorPos);
+    await createMemory(anchor.id, currentSpaceId, content, 'text', pendingAnchorPos);
+    setPendingAnchorPos(null);
+  };
+
+  const handleModelReady = (glbUrl: string) => {
+    useAppStore.getState().setRoomModelUrl(glbUrl);
+    setShowScan(false);
+  };
+
   return (
     <div className="h-screen w-screen flex bg-[#0a0a0f]">
-      {/* 3D Canvas area — Person A builds this */}
+      {/* 3D Canvas + HUD */}
       <div className="flex-1 relative">
-        <div className="absolute inset-0 flex items-center justify-center text-gray-500">
-          <div className="text-center">
-            <p className="text-2xl neon-text mb-2">3D Workspace</p>
-            <p className="text-sm opacity-60">Person A: Build SceneCanvas, PointCloud, etc. here</p>
-            <button
-              onClick={() => useAppStore.getState().setCurrentSpaceId(null)}
-              className="mt-4 px-4 py-2 glass-panel neon-border text-sm hover:glow-cyan transition-all"
-            >
-              ← Back to Spaces
-            </button>
-          </div>
+        <SceneCanvas onPlaceAnchor={handlePlaceAnchor} />
+
+        {/* Top bar */}
+        <div className="absolute top-4 left-4 flex gap-2 items-center">
+          <button
+            onClick={() => useAppStore.getState().setCurrentSpaceId(null)}
+            className="px-4 py-2 glass-panel neon-border text-sm hover:glow-cyan transition-all"
+          >
+            ← Back
+          </button>
+          <button
+            onClick={() => setShowScan(true)}
+            className="px-4 py-2 glass-panel neon-border text-sm hover:glow-cyan transition-all"
+          >
+            Scan Room
+          </button>
         </div>
+
+        {/* Voice indicator */}
+        <VoiceIndicator />
+
+        {/* Add Memory Popup */}
+        {pendingAnchorPos && (
+          <AddMemoryPopup
+            position={pendingAnchorPos}
+            onSave={handleSaveMemory}
+            onCancel={() => setPendingAnchorPos(null)}
+          />
+        )}
+
+        {/* Scan UI */}
+        {showScan && (
+          <ScanUI
+            spaceId={currentSpaceId}
+            onClose={() => setShowScan(false)}
+            onModelReady={handleModelReady}
+          />
+        )}
       </div>
 
-      {/* Sidebar — will hold MemoryList, AgentChat */}
-      <div className="w-80 glass-panel border-l border-cyan-900/30 p-4 overflow-y-auto">
-        <h2 className="neon-text text-lg font-semibold mb-4">Memories</h2>
-        <p className="text-sm text-gray-500">Sidebar content coming soon...</p>
-      </div>
+      {/* Sidebar */}
+      <Sidebar />
     </div>
   );
 }

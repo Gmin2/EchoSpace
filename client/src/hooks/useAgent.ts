@@ -1,5 +1,5 @@
 import { useAppStore } from '../stores/appStore';
-import { updateMemoryConnections, updateMemoryTags } from './useMemories';
+import { createAnchor, createMemory, updateMemoryConnections, updateMemoryTags } from './useMemories';
 import { playAudioBase64 } from '../lib/audio';
 import type { AgentContext, VoiceResponse, ChatResponse, AgentAction } from '../types/agent';
 
@@ -20,12 +20,24 @@ function buildContext(spaceId: string, spaceName: string, memories: any[]): Agen
   };
 }
 
-async function dispatchActions(actions: AgentAction[]) {
+async function dispatchActions(actions: AgentAction[], spaceId: string) {
   for (const action of actions) {
-    switch (action.type) {
+    const type = action.type.toLowerCase();
+
+    switch (type) {
+      case 'create_memory': {
+        const content = action.payload.content as string;
+        const title = action.payload.title as string;
+        const position = action.payload.position as { x: number; y: number; z: number };
+        if (content && position) {
+          const anchor = await createAnchor(spaceId, position);
+          await createMemory(anchor.id, spaceId, content, 'text', position, { title });
+          console.log('Agent created memory:', title);
+        }
+        break;
+      }
       case 'connect_memories': {
         const ids = (action.payload.ids as string[]) || [];
-        // Connect each memory to all others in the list
         for (const id of ids) {
           const others = ids.filter((oid) => oid !== id);
           await updateMemoryConnections(id, others);
@@ -43,17 +55,12 @@ async function dispatchActions(actions: AgentAction[]) {
       case 'generate_image': {
         const prompt = action.payload.prompt as string;
         if (prompt) {
-          const mockMode = useAppStore.getState().mockMode;
-          const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-          if (mockMode) headers['X-Mock-Mode'] = 'true';
-
           const res = await fetch(`${API_BASE}/image`, {
             method: 'POST',
-            headers,
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ prompt }),
           });
           const data = await res.json();
-          // The caller can use data.imageUrl
           console.log('Generated image:', data.imageUrl?.slice(0, 50));
         }
         break;
@@ -77,33 +84,40 @@ export async function sendVoiceMessage(
   store.addAgentMessage({ role: 'user', content: '🎤 Voice message' });
 
   try {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (store.mockMode) headers['X-Mock-Mode'] = 'true';
-
     const res = await fetch(`${API_BASE}/voice`, {
       method: 'POST',
-      headers,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ audioBase64, context }),
     });
 
     const data: VoiceResponse = await res.json();
 
+    // Safety: if agentText is still JSON, extract it
+    let voiceMsg = data.agentText;
+    let voiceActions = data.actions || [];
+    try {
+      if (voiceMsg.startsWith('{')) {
+        const parsed = JSON.parse(voiceMsg);
+        if (parsed.message) voiceMsg = parsed.message;
+        if (Array.isArray(parsed.actions)) voiceActions = parsed.actions;
+      }
+    } catch { /* already plain text */ }
+    data.agentText = voiceMsg;
+    data.actions = voiceActions;
+
     store.addAgentMessage({
       role: 'agent',
-      content: data.agentText,
+      content: voiceMsg,
       audioBase64: data.agentAudioBase64,
     });
 
-    // Play agent audio
     if (data.agentAudioBase64) {
       store.setIsAgentSpeaking(true);
       await playAudioBase64(data.agentAudioBase64);
       store.setIsAgentSpeaking(false);
     }
 
-    // Dispatch actions
-    await dispatchActions(data.actions);
-
+    await dispatchActions(data.actions, spaceId);
     return data;
   } catch (err) {
     console.error('Voice request failed:', err);
@@ -127,21 +141,27 @@ export async function sendChatMessage(
   store.addAgentMessage({ role: 'user', content: message });
 
   try {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (store.mockMode) headers['X-Mock-Mode'] = 'true';
-
     const res = await fetch(`${API_BASE}/chat`, {
       method: 'POST',
-      headers,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message, context }),
     });
 
     const data: ChatResponse = await res.json();
 
-    store.addAgentMessage({ role: 'agent', content: data.data.message });
+    // Safety: if message is still JSON, extract it
+    let agentMsg = data.data.message;
+    let actions = data.data.actions || [];
+    try {
+      if (agentMsg.startsWith('{')) {
+        const parsed = JSON.parse(agentMsg);
+        if (parsed.message) agentMsg = parsed.message;
+        if (Array.isArray(parsed.actions)) actions = parsed.actions;
+      }
+    } catch { /* already plain text */ }
 
-    // Dispatch actions
-    await dispatchActions(data.data.actions);
+    store.addAgentMessage({ role: 'agent', content: agentMsg });
+    await dispatchActions(actions, spaceId);
   } catch (err) {
     console.error('Chat request failed:', err);
     store.addAgentMessage({ role: 'agent', content: 'Sorry, something went wrong.' });
