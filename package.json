@@ -4,18 +4,24 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev:server": "nodemon --exec ts-node src/index.ts",
+    "dev:client": "cd client && pnpm dev",
+    "dev": "concurrently \"pnpm dev:server\" \"pnpm dev:client\""
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "packageManager": "pnpm@10.15.1",
   "dependencies": {
-    "express": "^5.2.1"
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "openai": "^6.34.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
+    "@types/express-serve-static-core": "^5.1.1",
     "@types/node": "^25.6.0",
+    "concurrently": "^9.2.1",
     "nodemon": "^3.1.14",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.2"
