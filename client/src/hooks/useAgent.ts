@@ -113,7 +113,7 @@ export async function sendVoiceMessage(
 
     if (data.agentAudioBase64) {
       store.setIsAgentSpeaking(true);
-      await playAudioBase64(data.agentAudioBase64);
+      await playAudioBase64(data.agentAudioBase64, 'mp3');
       store.setIsAgentSpeaking(false);
     }
 
@@ -147,11 +147,13 @@ export async function sendChatMessage(
       body: JSON.stringify({ message, context }),
     });
 
-    const data: ChatResponse = await res.json();
+    const data = await res.json();
+    const chatData = data.data || {};
+    const audioBase64 = data.audioBase64 || '';
 
     // Safety: if message is still JSON, extract it
-    let agentMsg = data.data.message;
-    let actions = data.data.actions || [];
+    let agentMsg = chatData.message || '';
+    let actions = chatData.actions || [];
     try {
       if (agentMsg.startsWith('{')) {
         const parsed = JSON.parse(agentMsg);
@@ -160,7 +162,15 @@ export async function sendChatMessage(
       }
     } catch { /* already plain text */ }
 
-    store.addAgentMessage({ role: 'agent', content: agentMsg });
+    store.addAgentMessage({ role: 'agent', content: agentMsg, audioBase64 });
+
+    // Play agent voice
+    if (audioBase64) {
+      store.setIsAgentSpeaking(true);
+      await playAudioBase64(audioBase64, 'mp3');
+      store.setIsAgentSpeaking(false);
+    }
+
     await dispatchActions(actions, spaceId);
   } catch (err) {
     console.error('Chat request failed:', err);
