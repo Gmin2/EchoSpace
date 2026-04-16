@@ -26,36 +26,7 @@ EchoSpace turns any physical space into a persistent 3D memory map. Scan your ro
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────┐
-│                  Client                      │
-│                                              │
-│  Landing ──► Spaces ──► Create ──► Workspace │
-│                                    │         │
-│                          ┌─────────┴───────┐ │
-│                          │   3D Scene      │ │
-│                          │   (R3F Canvas)  │ │
-│                          │   ┌───────────┐ │ │
-│                          │   │MemoryCards│ │ │
-│                          │   │ Anchors   │ │ │
-│                          │   │ PointCloud│ │ │
-│                          │   └───────────┘ │ │
-│                          └─────────────────┘ │
-│                 Sidebar: Memories | Agent Chat│
-│                                              │
-│  Zustand (state) ◄──► Dexie (IndexedDB)     │
-└──────────────┬───────────────────────────────┘
-               │ /api/*
-┌──────────────▼───────────────────────────────┐
-│                  Backend                      │
-│                                              │
-│  POST /api/scan   → fal.ai Tripo3D → GLB    │
-│  POST /api/chat   → GPT-4o (agent reasoning)│
-│  POST /api/voice  → Whisper → GPT-4o → TTS  │
-│  POST /api/image  → GPT Image generation     │
-│  GET  /api/health → healthcheck              │
-└──────────────────────────────────────────────┘
-```
+![alt text](archi.png)
 
 ## AI Agent
 
