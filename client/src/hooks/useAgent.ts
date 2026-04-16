@@ -1,7 +1,7 @@
 import { useAppStore } from '../stores/appStore';
 import { createAnchor, createMemory, updateMemoryConnections, updateMemoryTags } from './useMemories';
 import { playAudioBase64 } from '../lib/audio';
-import type { AgentContext, VoiceResponse, ChatResponse, AgentAction } from '../types/agent';
+import type { AgentContext, VoiceResponse, AgentAction } from '../types/agent';
 
 const API_BASE = '/api';
 
